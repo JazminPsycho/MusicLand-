@@ -50,3 +50,11 @@ sh start.sh --help
 ```
 
 La búsqueda de patrones de claves privadas, tokens GitHub, claves AWS y credenciales incrustadas en URLs no encontró coincidencias en el fuente preparado. Las contraseñas de fixtures son desechables. Esto es un control de patrones, no una auditoría exhaustiva del historial ni de dependencias.
+
+## Recuperación de importaciones · 0.1.1
+
+`tests/test_import_recovery.py` agrega seis pruebas de integración. Se guarda un álbum de dos pistas, se sube una y se crea una aplicación nueva sobre los mismos datos. El cliente recupera metadatos/revisión y el inventario exacto; subir solo la pista pendiente permite convertir el álbum en el orden original. Otro caso provoca un fallo de FFmpeg, reinicia la aplicación y convierte con los WAV conservados sin nuevas subidas.
+
+También se verifican conflictos de edición y arranque con una revisión anterior (409), rechazo de slots repetidos o inválidos, exclusión mutua entre escritura y conversión, denegación a anónimos/oyentes, conservación del WAV anterior frente a reemplazo corrupto y conservación de portada ante ENOSPC simulado. Resultado de la suite completa: **19 pruebas aprobadas**. Sintaxis Python/JavaScript verificada.
+
+La vista previa volvió a fallar: `relay could not open browser port 4173: timed out waiting for relay readiness`. Se consultó el estado del entorno y se detuvo la vista previa. No se afirma haber probado la UI con navegador. La evidencia de esta versión es integración HTTP/WSGI y revisión del código.

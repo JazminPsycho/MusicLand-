@@ -1,4 +1,4 @@
-# JAPs Música · 0.1.0
+# JAPs Música · 0.1.1
 
 Tu colección. Tu espacio musical. Aplicación web local en español, creada desde cero a partir del plan de Jazmín Schürrer, con asistencia de IA. Esta entrega es un prototipo funcional: consultar las limitaciones y la evidencia antes de usar datos únicos.
 
@@ -6,10 +6,10 @@ Tu colección. Tu espacio musical. Aplicación web local en español, creada des
 
 Requisitos: Linux x86_64, Python 3.11 o posterior con `venv`, FFmpeg con `libmp3lame`, navegador moderno y conexión para instalar dependencias la primera vez. Verificado en el contenedor Debian 13 con Python 3.12.14 y FFmpeg 7.1.5; no implica validación en Juggernaut o Bastión.
 
-1. Descomprimí `JAPs-Musica-v0.1.0.zip` en una carpeta propia.
+1. Descomprimí `JAPs-Musica-v0.1.1.zip` en una carpeta propia.
 2. Abrí una terminal allí y ejecutá `sh start.sh --desktop`. La primera vez crea un entorno Python e instala las dependencias fijadas. Si faltan requisitos: Debian `sudo apt install python3-venv ffmpeg`; EndeavourOS `sudo pacman -S python ffmpeg`.
 3. Abrí `http://127.0.0.1:8765`. Copiá el token local mostrado por el lanzador y creá tu administradora con una contraseña de al menos 12 caracteres. El token sirve solo desde el anfitrión y deja de servir al existir una cuenta. No hay contraseña predeterminada.
-4. En **Importar**, elegí artista, álbum, WAV PCM y portada JPEG/PNG opcional. Revisá títulos y orden. Los MP3 estéreo de 192 kb/s se preparan una sola vez. **Actualizar estado** muestra el resultado. Los títulos del borrador se conservan en ese navegador; después de una recarga, seleccioná los archivos otra vez.
+4. En **Importar**, elegí artista, álbum, WAV PCM y portada JPEG/PNG opcional. Revisá títulos y orden. Los MP3 estéreo de 192 kb/s se preparan una sola vez. **Actualizar estado** muestra el resultado. El borrador se guarda en el servidor. Después de una recarga, en Importaciones usá **Abrir y continuar**: solo necesitás seleccionar los WAV pendientes. Las pistas ya recibidas no se suben otra vez. **Reintentar conversión** reutiliza los archivos de un trabajo fallido; si falta alguno, el mensaje indica que abras el borrador.
 5. Abrí el álbum y una canción. El reproductor permanece al navegar por Biblioteca, Resumen y Cuentas. Para detener el servidor usá **Ctrl+C** en la terminal. **Salir** cierra la sesión y limpia el reproductor.
 
 Los datos quedan en `~/.local/share/japs-musica`, fuera del código. Para elegir otra carpeta: `sh start.sh --data '/ruta con espacios/mis datos'`. La misma carpeta no puede abrirse con dos servidores. Una segunda ejecución no borra cuentas ni catálogo. No incluyas esa carpeta en un repositorio público.
@@ -45,7 +45,7 @@ Detené el servidor antes de la copia. Los comandos rechazan trabajo concurrente
 sh start.sh --data '/ruta/nueva/restauracion'
 ```
 
-Se usa la API de backup de SQLite, un manifiesto SHA-256 y copia de medios. La restauración verifica hashes e integridad, invalida las sesiones y conserva cuentas y estadísticas. No copia borradores ni WAV temporales. La configuración settings.json se incluye si existe. Las opciones de arranque deben conservarse junto con la copia; `config.example.env` documenta los parámetros sin secretos. No subas copias privadas a releases públicas.
+Se usa la API de backup de SQLite, un manifiesto SHA-256 y copia de medios. La restauración verifica hashes e integridad, invalida las sesiones y conserva cuentas y estadísticas. No copia WAV temporales: los metadatos de borradores quedan en SQLite y, después de restaurar, hay que seleccionar los archivos faltantes. La configuración settings.json se incluye si existe. Las opciones de arranque deben conservarse junto con la copia; `config.example.env` documenta los parámetros sin secretos. No subas copias privadas a releases públicas.
 
 Actualización: detener, crear y verificar una copia, descomprimir la nueva versión aparte, iniciar con la carpeta de datos compatible y repetir acceso/reproducción. Para volver atrás: detener, restaurar la copia en otra carpeta e iniciar la versión anterior con esa carpeta. El esquema de esta versión es 1; se rechazan esquemas desconocidos. No hay migraciones de versiones anteriores porque esta app se creó desde cero.
 
@@ -57,6 +57,10 @@ No se verificó acceso SSH a tus equipos. La credencial `gh` del contenedor est�
 
 ## Limitaciones actuales
 
-Pendientes del plan maestro: revisión visual con navegador, Safari real y sonido; prueba de carga de 5/20 minutos; controles de accesibilidad medidos; reanudación visual de una subida parcial; consolidación y depuración 90 días/12 meses; códigos de error detallados; instalación en Bastión y adaptación de Drive; publicación GitHub y ficha real en el portafolio. Los datos de eventos se conservan sin depuración automática en esta versión. La interfaz muestra progreso por pista mientras convierte, pero no porcentaje de bytes enviados. La cola rechaza un segundo trabajo mientras hay otro activo, en vez de mantener una lista de espera. Para cambiar límites, copiá `settings.example.json` a `settings.json` dentro de la carpeta de datos y reiniciá. El resumen permite agrupar por canción, álbum, artista o usuario. La edición permite cambiar portada conservando la anterior si falla la validación. Las portadas se normalizan a JPEG cuadrado de 800 px.
+Pendientes del plan maestro: revisión visual con navegador, Safari real y sonido; prueba de carga de 5/20 minutos; controles de accesibilidad medidos; consolidación y depuración 90 días/12 meses; códigos de error detallados; instalación en Bastión y adaptación de Drive; publicación GitHub y ficha real en el portafolio. Los datos de eventos se conservan sin depuración automática en esta versión. La interfaz muestra progreso por pista mientras convierte, pero no porcentaje de bytes enviados. Una pista cuya subida se interrumpió se vuelve a enviar completa; no hay reanudación por byte. La cola rechaza un segundo trabajo mientras hay otro activo, en vez de mantener una lista de espera. Para cambiar límites, copiá `settings.example.json` a `settings.json` dentro de la carpeta de datos y reiniciá. El resumen permite agrupar por canción, álbum, artista o usuario. La edición permite cambiar portada conservando la anterior si falla la validación. Las portadas se normalizan a JPEG cuadrado de 800 px.
 
 La auditoría OWASP ASVS vigente y la revisión de dependencias con avisos de seguridad se requieren antes de una exposición a internet. Los controles actuales y pruebas de autorización no reemplazan esa auditoría. CD, extracción, metadatos automáticos y piloto remoto permanecen en backlog.
+
+## Cambios de 0.1.1
+
+Borradores persistentes con títulos y orden, inventario de pistas recibidas, continuación de subidas parciales por archivo y reintento de conversión sin reenvío. Los cambios simultáneos se controlan con una revisión del borrador y un bloqueo por trabajo. La portada anterior se conserva si falla su reemplazo por falta de espacio. Se recuperan también los títulos locales de la versión 0.1.0. Actualización compatible con los datos existentes: se agrega una tabla de borradores sin renombrar cuentas, álbumes ni pistas.

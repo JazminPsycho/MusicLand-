@@ -1,5 +1,5 @@
 """JAPs Música: local library. Data never belongs in the source tree."""
-import argparse, contextlib, datetime as dt, fcntl, hashlib, io, json, math, os, secrets, shutil, sqlite3, subprocess, threading, time, uuid, wave
+import argparse, contextlib, functools, datetime as dt, fcntl, hashlib, io, json, math, os, secrets, shutil, sqlite3, subprocess, threading, time, uuid, wave
 from pathlib import Path
 from zoneinfo import ZoneInfo
 from flask import Flask, request, jsonify, send_from_directory, Response, abort, g
@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS sessions(token TEXT PRIMARY KEY,user TEXT NOT NULL,ex
 CREATE TABLE IF NOT EXISTS albums(id TEXT PRIMARY KEY,title TEXT,artist TEXT,year TEXT,cover TEXT,fingerprint TEXT UNIQUE);
 CREATE TABLE IF NOT EXISTS tracks(id TEXT PRIMARY KEY,album TEXT,title TEXT,position INTEGER,duration REAL,file TEXT);
 CREATE TABLE IF NOT EXISTS jobs(id TEXT PRIMARY KEY,owner TEXT,state TEXT,detail TEXT,album TEXT);
+CREATE TABLE IF NOT EXISTS import_drafts(job TEXT PRIMARY KEY,metadata TEXT NOT NULL,revision INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS attempts(id TEXT PRIMARY KEY,user TEXT,track TEXT,started REAL,last REAL,seq INTEGER DEFAULT 0,position REAL DEFAULT 0,seconds REAL DEFAULT 0,intervals TEXT DEFAULT '[]',closed TEXT,valid INTEGER DEFAULT 0,complete INTEGER DEFAULT 0);
 CREATE TABLE IF NOT EXISTS events(id TEXT PRIMARY KEY,attempt TEXT,seq INTEGER,type TEXT,position REAL,seconds REAL,received REAL,UNIQUE(attempt,seq));
 CREATE TABLE IF NOT EXISTS spans(attempt TEXT,start REAL,end REAL,seconds REAL);
@@ -151,11 +152,58 @@ def create_app(data=None):
   return r
  @app.get('/api/imports')
  def jobs():return jsonify([dict(r) for r in db().execute('SELECT * FROM jobs ORDER BY rowid DESC LIMIT 50')])
+ def draft_metadata(raw,complete=False):
+  if not isinstance(raw,dict):abort(400)
+  tracks=raw.get('tracks',[])
+  if not isinstance(tracks,list) or len(tracks)>settings['tracks'] or (complete and not tracks):abort(400)
+  clean={'title':str(raw.get('title',''))[:200], 'artist':str(raw.get('artist',''))[:200], 'year':str(raw.get('year',''))[:4], 'tracks':[]}
+  seen=set()
+  for t in tracks:
+   if not isinstance(t,dict):abort(400)
+   slot=str(t.get('slot',''))
+   if not slot.isascii() or not slot.isdigit() or str(int(slot))!=slot or not 0<=int(slot)<settings['tracks'] or slot in seen:abort(400)
+   seen.add(slot);clean['tracks'].append({'slot':int(slot),'title':str(t.get('title',''))[:200]})
+  if complete and (not clean['title'].strip() or not clean['artist'].strip()):abort(400)
+  return clean
+ def writable_job(fn):
+  @functools.wraps(fn)
+  def wrapped(id,*args,**kwargs):
+   if job(id)['state'] not in ('draft','failed'):return error('El trabajo ya está en curso o terminado.',409)
+   folder=data/'staging'/id;folder.mkdir(exist_ok=True,mode=0o700)
+   with (folder/'write.lock').open('a+') as lock:
+    try:fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
+    except BlockingIOError:return error('Otra operación está guardando esta importación. Reintentá.',409)
+    if job(id)['state'] not in ('draft','failed'):return error('El trabajo ya está en curso o terminado.',409)
+    return fn(id,*args,**kwargs)
+  return wrapped
+ @app.get('/api/imports/<id>')
+ def get_draft(id):
+  j=job(id);row=db().execute('SELECT * FROM import_drafts WHERE job=?',(id,)).fetchone()
+  metadata=json.loads(row['metadata']) if row else {'title':'','artist':'','year':'','tracks':[]}
+  received={};folder=data/'staging'/id
+  for t in metadata['tracks']:
+   path=folder/(str(t['slot'])+'.wav')
+   try:
+    with wave.open(str(path),'rb') as w:received[str(t['slot'])]={'duration':w.getnframes()/w.getframerate(),'bytes':path.stat().st_size}
+   except (FileNotFoundError,wave.Error,EOFError):pass
+  return jsonify(**dict(j),metadata=metadata,revision=row['revision'] if row else 0,received=received,cover=(folder/'cover.jpg').is_file())
+ @app.put('/api/imports/<id>/draft')
+ @writable_job
+ def save_draft(id):
+  raw=request.get_json();clean=draft_metadata(raw)
+  with db():
+   db().execute('BEGIN IMMEDIATE');old=db().execute('SELECT revision FROM import_drafts WHERE job=?',(id,)).fetchone();revision=old['revision'] if old else 0
+   if raw.get('revision')!=revision:return error('El borrador cambió en otra pestaña. Volvé a abrirlo antes de guardar.',409)
+   revision+=1
+   db().execute('INSERT INTO import_drafts VALUES(?,?,?) ON CONFLICT(job) DO UPDATE SET metadata=excluded.metadata,revision=excluded.revision',(id,json.dumps(clean),revision))
+  return jsonify(ok=True,revision=revision)
  @app.put('/api/imports/<id>/files/<slot>')
+ @writable_job
  def upload(id,slot):
   if job(id)['state'] not in ('draft','failed'):return error('El trabajo ya está en curso.',409)
   if slot!='cover' and (not slot.isdigit() or not 0<=int(slot)<settings['tracks']):abort(400)
   folder=data/'staging'/id
+  normalized=folder/(uid()+'.jpg.part')
   if shutil.disk_usage(data).free<max(request.content_length or 0,0)+256*1024*1024:return error('Falta espacio libre para importar.',507)
   temp=folder/(uid()+'.part');size=0
   try:
@@ -168,7 +216,8 @@ def create_app(data=None):
     if size>settings['cover_mib']*1024*1024:abort(413)
     with Image.open(temp) as image:
      if image.format not in ('JPEG','PNG') or image.width*image.height>16000000:raise ValueError('Portada no válida')
-     image.convert('RGB').resize((800,800)).save(folder/'cover.jpg','JPEG',quality=85)
+     image.convert('RGB').resize((800,800)).save(normalized,'JPEG',quality=85)
+    normalized.replace(folder/'cover.jpg')
     temp.unlink()
    else:
     with wave.open(str(temp),'rb') as w:
@@ -180,19 +229,32 @@ def create_app(data=None):
     temp.replace(folder/(slot+'.wav'))
    return jsonify(ok=True)
   except (ValueError,wave.Error,EOFError,UnidentifiedImageError,Image.DecompressionBombError):return error('Archivo inválido. Usá WAV PCM o una portada JPEG/PNG.')
-  finally:temp.unlink(missing_ok=True)
+  except OSError as exc:return error('No se pudo guardar el archivo; lo recibido antes se conserva.',507 if exc.errno in (28,122) else 400)
+  finally:
+   temp.unlink(missing_ok=True);normalized.unlink(missing_ok=True)
  @app.post('/api/imports/<id>/start')
+ @writable_job
  def start_job(id):
-  j=job(id);raw=request.get_json();tracks=raw.get('tracks',[])
-  if j['state'] not in ('draft','failed'):return error('Trabajo ya iniciado.',409)
-  if not 1<=len(tracks)<=settings['tracks'] or not str(raw.get('title','')).strip() or not str(raw.get('artist','')).strip():abort(400)
-  slots=[str(t.get('slot','')) for t in tracks]
-  if len(set(slots))!=len(slots) or any(not s.isdigit() or not (data/'staging'/id/(s+'.wav')).is_file() for s in slots):abort(400)
+  raw=request.get_json()
+  stored=db().execute('SELECT * FROM import_drafts WHERE job=?',(id,)).fetchone()
+  if not raw:
+   if not stored:return error('Completá primero el borrador del álbum.',400)
+   raw=json.loads(stored['metadata'])
+  elif stored and raw.get('revision')!=stored['revision']:
+   return error('El borrador cambió. Volvé a abrirlo antes de preparar el álbum.',409)
+  raw=draft_metadata(raw,complete=True);tracks=raw['tracks']
+  if any(not (data/'staging'/id/(str(t['slot'])+'.wav')).is_file() for t in tracks):return error('Faltan pistas. Abrí el borrador y seleccioná solo los archivos pendientes.',400)
   lock=(data/'import.lock').open('a+')
   try:fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
   except BlockingIOError:lock.close();return error('Hay otra importación o copia en curso.',409)
-  with db():db().execute("UPDATE jobs SET state='validating',detail='Validando audio' WHERE id=?",(id,))
-  threading.Thread(target=convert,args=(data,id,raw,lock),daemon=True).start();return jsonify(ok=True)
+  try:
+   with db():
+    revision=(stored['revision'] if stored else 0)+1
+    db().execute('INSERT INTO import_drafts VALUES(?,?,?) ON CONFLICT(job) DO UPDATE SET metadata=excluded.metadata,revision=excluded.revision',(id,json.dumps(raw),revision))
+    db().execute("UPDATE jobs SET state='validating',detail='Validando audio' WHERE id=?",(id,))
+   threading.Thread(target=convert,args=(data,id,raw,lock),daemon=True).start()
+  except Exception:lock.close();raise
+  return jsonify(ok=True)
  @app.patch('/api/admin/albums/<id>')
  def edit_album(id):
   raw=request.get_json()
