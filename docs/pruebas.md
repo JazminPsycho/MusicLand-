@@ -35,3 +35,18 @@ En iPhone 13 Pro/Safari: anotar iOS real, escuchar, pausar, avanzar, bloquear pa
 En Bastión: resolver destino y verificar huella y SO; inspeccionar servicios y respaldos actuales; instalar aisladamente; medir 5 minutos de reposo y 20 minutos con dos clientes. Registrar CPU/RSS, RAM disponible, swap, disco, red y cortes, con importación aparte. Objetivos orientativos: menos de 150 MiB en reposo y 250 MiB en reproducción. No hay mediciones reales de estos recorridos ni promesa de cumplimiento.
 
 Antes de internet: auditoría contra la versión vigente de OWASP ASVS, análisis de avisos de seguridad de dependencias, HTTPS, pruebas de retirada y revocación; resolver hallazgos altos/críticos. El servidor HTTP local no constituye un despliegue público seguro.
+
+## Instalación limpia desde ZIP
+
+Se generó el ZIP con `git archive`, se descomprimió en `/tmp/JAPs instalacion limpia/JAPs-Musica-v0.1.0`, se creó un venv nuevo y se instalaron todas las versiones fijadas desde wheels descargados de PyPI. No se reutilizó el venv de desarrollo. Resultado en esa copia: **13 passed in 2.72s**. `sh start.sh --help` encontró las dependencias y mostró las opciones correctamente. La suite volvió a convertir WAV, verificar deduplicación y restaurar en un destino independiente. La apertura de un puerto HTTP permanece sin verificar por la restricción de sockets descrita arriba.
+
+Comandos equivalentes para la verificación de la copia (con red disponible):
+
+```sh
+python3 -m venv .venv
+.venv/bin/pip install -r requirements-dev.txt
+.venv/bin/python -m pytest -q
+sh start.sh --help
+```
+
+La búsqueda de patrones de claves privadas, tokens GitHub, claves AWS y credenciales incrustadas en URLs no encontró coincidencias en el fuente preparado. Las contraseñas de fixtures son desechables. Esto es un control de patrones, no una auditoría exhaustiva del historial ni de dependencias.
