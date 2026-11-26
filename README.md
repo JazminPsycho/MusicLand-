@@ -1,4 +1,4 @@
-# JAPs Música · 0.1.1
+# JAPs Música · 0.5.0
 
 Tu colección. Tu espacio musical. Aplicación web local en español, creada desde cero a partir del plan de Jazmín Schürrer, con asistencia de IA. Esta entrega es un prototipo funcional: consultar las limitaciones y la evidencia antes de usar datos únicos.
 
@@ -6,7 +6,7 @@ Tu colección. Tu espacio musical. Aplicación web local en español, creada des
 
 Requisitos: Linux x86_64, Python 3.11 o posterior con `venv`, FFmpeg con `libmp3lame`, navegador moderno y conexión para instalar dependencias la primera vez. Verificado en el contenedor Debian 13 con Python 3.12.14 y FFmpeg 7.1.5; no implica validación en Juggernaut o Bastión.
 
-1. Descomprimí `JAPs-Musica-v0.1.1.zip` en una carpeta propia.
+1. Descomprimí `JAPs-Musica-v0.5.0.zip` en una carpeta propia.
 2. Abrí una terminal allí y ejecutá `sh start.sh --desktop`. La primera vez crea un entorno Python e instala las dependencias fijadas. Si faltan requisitos: Debian `sudo apt install python3-venv ffmpeg`; EndeavourOS `sudo pacman -S python ffmpeg`.
 3. Abrí `http://127.0.0.1:8765`. Copiá el token local mostrado por el lanzador y creá tu administradora con una contraseña de al menos 12 caracteres. El token sirve solo desde el anfitrión y deja de servir al existir una cuenta. No hay contraseña predeterminada.
 4. En **Importar**, elegí artista, álbum, WAV PCM y portada JPEG/PNG opcional. Revisá títulos y orden. Los MP3 estéreo de 192 kb/s se preparan una sola vez. **Actualizar estado** muestra el resultado. El borrador se guarda en el servidor. Después de una recarga, en Importaciones usá **Abrir y continuar**: solo necesitás seleccionar los WAV pendientes. Las pistas ya recibidas no se suben otra vez. **Reintentar conversión** reutiliza los archivos de un trabajo fallido; si falta alguno, el mensaje indica que abras el borrador.
@@ -64,3 +64,13 @@ La auditoría OWASP ASVS vigente y la revisión de dependencias con avisos de se
 ## Cambios de 0.1.1
 
 Borradores persistentes con títulos y orden, inventario de pistas recibidas, continuación de subidas parciales por archivo y reintento de conversión sin reenvío. Los cambios simultáneos se controlan con una revisión del borrador y un bloqueo por trabajo. La portada anterior se conserva si falla su reemplazo por falta de espacio. Se recuperan también los títulos locales de la versión 0.1.0. Actualización compatible con los datos existentes: se agrega una tabla de borradores sin renombrar cuentas, álbumes ni pistas.
+
+## Cambios de 0.5.0
+
+- Biblioteca con búsqueda sin tildes y estados vacíos diferenciados.
+- Detalle de álbum, reproducción del álbum completo y pista actual destacada.
+- Reproductor adaptable, con artista conservado al pasar de pista.
+- Importaciones con actualización automática y acceso directo al álbum preparado.
+- Escuchas por hora con barras y valores legibles.
+
+Esta entrega conserva el esquema de datos de 0.1.1. Para volver a esa versión, detené el proceso y arrancá el paquete anterior con el mismo directorio de datos. Conservá un respaldo previo si trabajás con tu colección real.
