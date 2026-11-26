@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+.pytest_cache/
+data/
+*.sqlite*
+*.log
+*.part
+*.lock
+.env
+*.zip
+wheelhouse/

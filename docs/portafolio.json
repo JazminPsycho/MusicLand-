@@ -1,0 +1,19 @@
+{
+  "id": "japs-musica",
+  "title": "JAPs Música",
+  "titleEn": "JAPs Music",
+  "category": "Aplicación local",
+  "categoryEn": "Local application",
+  "description": "Biblioteca musical local con importación de WAV, reproductor persistente, aprobación de cuentas y un primer resumen de escuchas.",
+  "descriptionEn": "A local music library with WAV import, a persistent player, account approval and an initial listening summary.",
+  "tags": "Python, SQLite, Flask, Waitress, FFmpeg, JavaScript",
+  "problem": "Organizar y escuchar una colección propia en la red doméstica, con control de acceso y datos fuera del código.",
+  "approach": "Conversión única a MP3, archivos privados, sesiones verificadas en cada solicitud y eventos de escucha idempotentes.",
+  "contribution": "Especificación y dirección de Jazmín Schürrer. Implementación desde cero con asistencia de IA; verificación automatizada en contenedor Linux.",
+  "learning": "Prototipo funcional con pruebas automatizadas y recuperación verificada en carpeta independiente. La validación en equipos personales sigue pendiente.",
+  "limitations": "Revisión visual, Safari, carga prolongada, retención, integración con Bastión y publicación pendientes. No se ofrece acceso público a la colección.",
+  "internalNotes": "Borrador listo para completar con captura real, repositorio y descarga una vez publicados. No cambiar la audiencia del sitio. Guardar y publicar mediante la API existente con control de revisión; no incrustar datos privados ni enlaces inventados.",
+  "github": "",
+  "attachment": "",
+  "cover": ""
+}
