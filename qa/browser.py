@@ -143,8 +143,9 @@ def main():
         args.screenshots.mkdir(parents=True, exist_ok=True)
     with sync_playwright() as playwright:
         options = {}
-        if args.engine == "chromium" and os.environ.get("JAPS_CHROMIUM"):
-            options["executable_path"] = os.environ["JAPS_CHROMIUM"]
+        executable = os.environ.get("JAPS_" + args.engine.upper())
+        if executable:
+            options["executable_path"] = executable
         browser = getattr(playwright, args.engine).launch(**options)
         for width in (args.width,) if args.width else WIDTHS:
             check(browser, width, args.engine, args.screenshots)
