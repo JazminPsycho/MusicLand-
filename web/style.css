@@ -82,3 +82,34 @@ body:has(#player:not([hidden])) main { padding-bottom:150px; }
 .hour-chart { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr)); gap:5px 20px; background:var(--paper); border:1px solid var(--line); padding:14px; border-radius:12px; }
 .hour-row { display:grid; grid-template-columns:3.3em minmax(40px,1fr) 4em; gap:8px; align-items:center; font-size:13px; font-variant-numeric:tabular-nums; }
 .hour-row meter { width:100%; }
+
+/* Reserve the measured space below the last control and above keyboard focus. */
+:root { --player-height:0px; scroll-padding:115px 0 calc(var(--player-height) + 16px); }
+body:has(#player:not([hidden])) main { padding-bottom:calc(var(--player-height) + 32px); }
+.track-list { overflow:visible; }
+.import-track {
+  min-width:0;
+  padding:14px 0;
+  border-top:1px solid var(--line);
+}
+.import-track p { margin:8px 0; color:var(--muted); }
+.import-track .actions { margin-bottom:10px; }
+form label, form input, #content { min-width:0; }
+header :focus-visible, #player :focus-visible { outline-color:var(--gold); }
+#player { padding-bottom:calc(12px + env(safe-area-inset-bottom, 0px)); }
+@media(max-width:768px) {
+  :root { scroll-padding-top:12px; }
+}
+@media(max-width:420px) {
+  #player { grid-template-columns:minmax(0,1fr) auto; column-gap:8px; }
+  nav { margin-right:0; }
+}
+@media(max-width:420px) {
+  header { column-gap:8px; }
+  .brand { font-size:24px; gap:7px; }
+  .account { min-width:0; gap:6px; }
+  #account-name { max-width:8ch; }
+  #logout { padding-inline:10px; }
+  nav { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:4px; }
+  nav button { font-size:14px; padding-inline:4px; }
+}

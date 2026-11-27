@@ -38,12 +38,16 @@ function normalize(text) {
   return text.normalize('NFD').replace(/\p{M}/gu,'').toLocaleLowerCase().trim();
 }
 
+let libraryQuery = "";
+
 async function library() {
   catalog=await api('/api/catalog');
+  notice('');
   page('library','Mi biblioteca','Colección');
   content.replaceChildren();
   const [label,search]=input('Buscar en la biblioteca','search');
   search.placeholder='Álbum, artista o canción';
+  search.value=libraryQuery;
   const toolbar=el('div',undefined,'library-toolbar');
   toolbar.append(label);
   if (user.role==='admin') toolbar.append(button('Importar álbum',()=>imports()));
@@ -71,12 +75,14 @@ async function library() {
       grid.append(empty);
     }
   }
-  search.oninput=render;
+  search.oninput=()=>{libraryQuery=search.value;render();};
   content.append(toolbar,count,grid);
   render();
+  search.focus();
 }
 
 function album(entry) {
+  notice('');
   page('library',entry.title,'Álbum');
   const back=button('← Biblioteca',library,'secondary');
   const hero=el('div',undefined,'detail');
@@ -113,10 +119,89 @@ function updateSelection() {
 }
 function edit(a){page('library','Editar álbum','Catálogo');const f=el('form'),[tl,title]=input('Álbum','text',a.title),[al,artist]=input('Artista','text',a.artist);const [cl,cover]=input('Cambiar portada (opcional)','file');cover.accept='image/jpeg,image/png';f.append(tl,al,cl);const tracks=a.tracks.map(t=>({...t})),holder=el('div');function render(){holder.replaceChildren();tracks.forEach((t,i)=>{const row=el('div',undefined,'draft-track'),[l,v]=input('Título '+(i+1),'text',t.title);v.oninput=()=>t.title=v.value;if(t.duration)l.append(el('small',time(t.duration)+' · '+(t.status||'Listo para subir')));row.append(l,button('Subir',()=>{if(i){[tracks[i-1],tracks[i]]=[tracks[i],tracks[i-1]];render();}}),button('Bajar',()=>{if(i<tracks.length-1){[tracks[i+1],tracks[i]]=[tracks[i],tracks[i+1]];render();}}));holder.append(row);});}render();f.append(holder);const save=el('button','Guardar cambios');f.append(save);f.onsubmit=async e=>{e.preventDefault();try{await api('/api/admin/albums/'+a.id,{title:title.value,artist:artist.value,year:a.year,tracks},'PATCH');if(cover.files[0])await api('/api/admin/albums/'+a.id+'/cover',cover.files[0],'PUT');await library();notice('Cambios guardados. Se conservaron IDs y estadísticas.');}catch(e){notice(e.message);}};content.replaceChildren(f);}
 async function emit(type){if(!attempt)return;const current=attempt,position=audio.currentTime||0;const event={id:randomID(),seq:++seq,type,position};lastSent=Date.now();sessionStorage.setItem('japs-attempt',JSON.stringify({id:current,track:queue[index]?.id,seq,position}));eventChain=eventChain.catch(()=>{}).then(async()=>{for(let i=0;i<2;i++){try{return await api('/api/attempts/'+current+'/events',event);}catch(e){if(i)notice('Se perdió una señal de escucha: '+e.message);}}});return eventChain;}
-let playChain=Promise.resolve();
-function play(tracks,i,artist=''){playChain=playChain.catch(()=>{}).then(()=>switchTrack(tracks,i,artist));return playChain;}
-async function switchTrack(tracks,i,artist=''){if(i<0||i>=tracks.length)return;if(attempt){await emit('skip');attempt=null;}audio.pause();queue=tracks;index=i;seq=0;attempt=(await api('/api/attempts',{track:tracks[i].id})).id;audio.src='/media/audio/'+tracks[i].id;$('#player').hidden=false;$('#now').textContent=tracks[i].title;$('#artist').textContent=artist;updateSelection();try{await audio.play();await emit('resume');}catch(e){notice('Tocá Reproducir para comenzar.');}}
-$('#toggle').onclick=async()=>{if(audio.paused){if(audio.ended||!attempt){await play(queue,index,$('#artist').textContent);return;}try{await audio.play();await emit('resume');}catch(e){notice(e.message);}}else{await emit('pause');audio.pause();}};$('#previous').onclick=()=>play(queue,index-1,$('#artist').textContent);$('#next').onclick=()=>play(queue,index+1,$('#artist').textContent);audio.onplay=()=>$('#toggle').textContent='Pausar';audio.onpause=()=>$('#toggle').textContent='Reproducir';audio.ontimeupdate=()=>{$('#elapsed').textContent=time(audio.currentTime);$('#duration').textContent=time(audio.duration);$('#seek').value=Number.isFinite(audio.duration)?audio.currentTime/audio.duration*100:0;if(!audio.paused&&Date.now()-lastSent>5000)emit('progress');};$('#seek').onchange=async e=>{await emit('pause');if(Number.isFinite(audio.duration)){audio.currentTime=audio.duration*e.target.value/100;await emit('seek');if(!audio.paused)await emit('resume');}};audio.onwaiting=()=>emit('waiting');audio.onplaying=()=>emit('resume');audio.onended=async()=>{await emit('ended');attempt=null;sessionStorage.removeItem('japs-attempt');if(index+1<queue.length)play(queue,index+1,$('#artist').textContent);};audio.onerror=()=>{emit('error');attempt=null;notice('No se pudo reproducir. Comprobá la conexión y tu acceso.');};window.addEventListener('pagehide',()=>{if(attempt){const body=new Blob([JSON.stringify({id:randomID(),seq:++seq,type:'pause',position:audio.currentTime||0})],{type:'application/json'});navigator.sendBeacon('/api/attempts/'+attempt+'/events',body);}});
+let playChain=Promise.resolve(), switching=0;
+const player=$('#player');
+new ResizeObserver(()=>{
+  document.documentElement.style.setProperty('--player-height',player.getBoundingClientRect().height+'px');
+}).observe(player);
+
+function play(tracks,i,artist=''){
+  if(i<0||i>=tracks.length)return;
+  switching++;
+  $('#toggle').disabled=true;
+  playChain=playChain.catch(()=>{}).then(async()=>{
+    const previous=attempt;
+    audio.pause();
+    if(previous)await emit('skip');
+    attempt=null;
+    const nextAttempt=await api('/api/attempts',{track:tracks[i].id});
+    queue=tracks;
+    index=i;
+    seq=0;
+    attempt=nextAttempt.id;
+    audio.src='/media/audio/'+tracks[i].id;
+    player.hidden=false;
+    $('#now').textContent=tracks[i].title;
+    $('#artist').textContent=artist;
+    $('#seek').value=0;
+    updateSelection();
+    try{await audio.play();}catch{notice('Tocá Reproducir para comenzar.');}
+  }).finally(()=>{
+    switching--;
+    $('#toggle').disabled=switching>0;
+  });
+  return playChain;
+}
+
+const playbackError=e=>notice(e.message);
+$('#toggle').onclick=async()=>{
+  try{
+    if(audio.paused){
+      if(audio.ended||!attempt){await play(queue,index,$('#artist').textContent);return;}
+      await audio.play();
+    }else{
+      audio.pause();
+      await emit('pause');
+    }
+  }catch(e){playbackError(e);}
+};
+$('#previous').onclick=()=>play(queue,index-1,$('#artist').textContent)?.catch(playbackError);
+$('#next').onclick=()=>play(queue,index+1,$('#artist').textContent)?.catch(playbackError);
+audio.onplay=()=>$('#toggle').textContent='Pausar';
+audio.onpause=()=>$('#toggle').textContent='Reproducir';
+audio.ontimeupdate=()=>{
+  $('#elapsed').textContent=time(audio.currentTime);
+  $('#duration').textContent=time(audio.duration);
+  if(document.activeElement!==$('#seek'))$('#seek').value=Number.isFinite(audio.duration)?audio.currentTime/audio.duration*100:0;
+  if(!audio.paused&&!audio.seeking&&Date.now()-lastSent>5000)emit('progress');
+};
+$('#seek').onchange=e=>{
+  if(!Number.isFinite(audio.duration)||switching)return;
+  emit('pause');
+  audio.currentTime=audio.duration*Number(e.target.value)/100;
+  emit('seek');
+};
+audio.onwaiting=()=>{if(!audio.paused&&!audio.seeking)emit('waiting');};
+audio.onplaying=()=>emit('resume');
+audio.onended=()=>{
+  emit('ended');
+  attempt=null;
+  sessionStorage.removeItem('japs-attempt');
+  if(!switching&&index+1<queue.length)play(queue,index+1,$('#artist').textContent)?.catch(playbackError);
+};
+audio.onerror=()=>{
+  if(!audio.getAttribute('src'))return;
+  emit('error');
+  attempt=null;
+  notice('No se pudo reproducir. Comprobá la conexión y tu acceso.');
+};
+window.addEventListener('pagehide',()=>{
+  if(!attempt)return;
+  const event={id:randomID(),seq:++seq,type:'pause',position:audio.currentTime||0};
+  const body=new Blob([JSON.stringify(event)],{type:'application/json'});
+  navigator.sendBeacon('/api/attempts/'+attempt+'/events',body);
+});
+
 async function imports(id=null) {
   page('import','Importar álbum','Catálogo');
   content.replaceChildren();
@@ -161,11 +246,13 @@ async function imports(id=null) {
       const row=el('div',undefined,'import-track'),[label,value]=input('Pista '+(i+1),'text',t.title);
       value.disabled=busy;value.oninput=()=>{t.title=value.value;changed();};
       const received=state.received[String(t.slot)];
+      row.dataset.slot=t.slot;
       row.append(label,el('p',received?'Recibida · '+time(received.duration):t.file?'Seleccionada · pendiente de subir':'Falta seleccionar el WAV'));
       const controls=el('div',undefined,'actions');
-      const up=button('Subir',()=>{if(i){[state.tracks[i-1],state.tracks[i]]=[state.tracks[i],state.tracks[i-1]];render();changed();}}),
-        down=button('Bajar',()=>{if(i<state.tracks.length-1){[state.tracks[i+1],state.tracks[i]]=[state.tracks[i],state.tracks[i+1]];render();changed();}});
+      const up=button('Subir',()=>{if(i){[state.tracks[i-1],state.tracks[i]]=[state.tracks[i],state.tracks[i-1]];render();tracks.querySelector('[data-slot="'+t.slot+'"] input').focus();changed();}}),
+        down=button('Bajar',()=>{if(i<state.tracks.length-1){[state.tracks[i+1],state.tracks[i]]=[state.tracks[i],state.tracks[i+1]];render();tracks.querySelector('[data-slot="'+t.slot+'"] input').focus();changed();}});
       up.disabled=busy||i===0;down.disabled=busy||i===state.tracks.length-1;controls.append(up,down);
+      up.setAttribute('aria-label','Subir pista '+(i+1));down.setAttribute('aria-label','Bajar pista '+(i+1));
       const [fileLabel,picker]=input(received?'Reemplazar WAV (opcional)':'Seleccionar este WAV','file');
       picker.accept='.wav';picker.disabled=busy;
       picker.onchange=()=>{if(picker.files[0]){t.file=picker.files[0];delete state.received[String(t.slot)];render();}};
@@ -192,8 +279,8 @@ async function imports(id=null) {
       for(const [i,t] of state.tracks.entries()) {
         if(state.received[String(t.slot)])continue;
         notice(`Subiendo pista ${i+1}/${state.tracks.length}…`);
-        await api(`/api/imports/${state.id}/files/${t.slot}`,t.file,'PUT');
-        state.received[String(t.slot)]={duration:0};render();
+        const uploaded=await api(`/api/imports/${state.id}/files/${t.slot}`,t.file,'PUT');
+        state.received[String(t.slot)]={duration:uploaded.duration};render();
       }
       if(state.coverFile){await api(`/api/imports/${state.id}/files/cover`,state.coverFile,'PUT');state.coverFile=null;state.hasCover=true;}
       await api(`/api/imports/${state.id}/start`,{...metadata(),revision:state.revision});
@@ -205,12 +292,18 @@ async function imports(id=null) {
       busy=false;for(const element of f.querySelectorAll('input,button'))element.disabled=false;render();
     }
   };
-  content.append(f);await showJobs();
+  content.append(f);title.focus();await showJobs();
 }
 async function showJobs() {
   clearTimeout(jobsTimer);
   let list=$('#jobs');if(!list){list=el('section');list.id='jobs';content.append(list);}
   const jobs=await api('/api/imports');if (!list.isConnected) return;
+  const signature=JSON.stringify(jobs);
+  if(jobs.some(job=>['validating','converting'].includes(job.state))) {
+    jobsTimer=setTimeout(()=>{if(list.isConnected)showJobs().catch(e=>notice(e.message));},2000);
+  }
+  if(list.dataset.signature===signature)return;
+  list.dataset.signature=signature;
   list.replaceChildren(el('h2','Importaciones'));
   if (!jobs.length) list.append(el('p','Todavía no hay importaciones.'));
   for(const j of jobs) {
@@ -228,11 +321,7 @@ async function showJobs() {
     list.append(row);
   }
   list.append(button('Actualizar estado',showJobs,'secondary'));
-  if(jobs.some(job=>['validating','converting'].includes(job.state))) {
-    jobsTimer=setTimeout(()=>{
-      if(list.isConnected) showJobs().catch(e=>notice(e.message));
-    },2000);
-  }
+
 }
 async function users(){ page('users','Cuentas','Administración');content.replaceChildren();for(const u of await api('/api/admin/users')){const row=el('div',undefined,'user');row.append(el('span',`${u.name} · ${u.role} · ${u.state}`));row.append(button(u.state==='active'?'Revocar':'Aprobar',async()=>{await api('/api/admin/users/'+u.id,{state:u.state==='active'?'revoked':'active'},'PATCH');await users();}));content.append(row);}}
 function hourChart(hours) {

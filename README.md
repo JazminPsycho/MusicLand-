@@ -1,4 +1,4 @@
-# JAPs Música · 0.5.0
+# JAPs Música · 0.6.0
 
 Tu colección. Tu espacio musical. Aplicación web local en español, creada desde cero a partir del plan de Jazmín Schürrer, con asistencia de IA. Esta entrega es un prototipo funcional: consultar las limitaciones y la evidencia antes de usar datos únicos.
 
@@ -6,7 +6,7 @@ Tu colección. Tu espacio musical. Aplicación web local en español, creada des
 
 Requisitos: Linux x86_64, Python 3.11 o posterior con `venv`, FFmpeg con `libmp3lame`, navegador moderno y conexión para instalar dependencias la primera vez. Verificado en el contenedor Debian 13 con Python 3.12.14 y FFmpeg 7.1.5; no implica validación en Juggernaut o Bastión.
 
-1. Descomprimí `JAPs-Musica-v0.5.0.zip` en una carpeta propia.
+1. Descomprimí `JAPs-Musica-v0.6.0.zip` en una carpeta propia.
 2. Abrí una terminal allí y ejecutá `sh start.sh --desktop`. La primera vez crea un entorno Python e instala las dependencias fijadas. Si faltan requisitos: Debian `sudo apt install python3-venv ffmpeg`; EndeavourOS `sudo pacman -S python ffmpeg`.
 3. Abrí `http://127.0.0.1:8765`. Copiá el token local mostrado por el lanzador y creá tu administradora con una contraseña de al menos 12 caracteres. El token sirve solo desde el anfitrión y deja de servir al existir una cuenta. No hay contraseña predeterminada.
 4. En **Importar**, elegí artista, álbum, WAV PCM y portada JPEG/PNG opcional. Revisá títulos y orden. Los MP3 estéreo de 192 kb/s se preparan una sola vez. **Actualizar estado** muestra el resultado. El borrador se guarda en el servidor. Después de una recarga, en Importaciones usá **Abrir y continuar**: solo necesitás seleccionar los WAV pendientes. Las pistas ya recibidas no se suben otra vez. **Reintentar conversión** reutiliza los archivos de un trabajo fallido; si falta alguno, el mensaje indica que abras el borrador.
@@ -57,7 +57,7 @@ No se verificó acceso SSH a tus equipos. La credencial `gh` del contenedor est�
 
 ## Limitaciones actuales
 
-Pendientes del plan maestro: revisión visual con navegador, Safari real y sonido; prueba de carga de 5/20 minutos; controles de accesibilidad medidos; consolidación y depuración 90 días/12 meses; códigos de error detallados; instalación en Bastión y adaptación de Drive; publicación GitHub y ficha real en el portafolio. Los datos de eventos se conservan sin depuración automática en esta versión. La interfaz muestra progreso por pista mientras convierte, pero no porcentaje de bytes enviados. Una pista cuya subida se interrumpió se vuelve a enviar completa; no hay reanudación por byte. La cola rechaza un segundo trabajo mientras hay otro activo, en vez de mantener una lista de espera. Para cambiar límites, copiá `settings.example.json` a `settings.json` dentro de la carpeta de datos y reiniciá. El resumen permite agrupar por canción, álbum, artista o usuario. La edición permite cambiar portada conservando la anterior si falla la validación. Las portadas se normalizan a JPEG cuadrado de 800 px.
+Pendientes del plan maestro: Safari en iPhone físico y sonido en los equipos de destino; prueba de carga de 5/20 minutos en Bastión; revisión completa de accesibilidad; consolidación y depuración 90 días/12 meses; códigos de error detallados; instalación en Bastión y adaptación de Drive; publicación GitHub y ficha real en el portafolio. Los datos de eventos se conservan sin depuración automática en esta versión. La interfaz muestra progreso por pista mientras convierte, pero no porcentaje de bytes enviados. Una pista cuya subida se interrumpió se vuelve a enviar completa; no hay reanudación por byte. La cola rechaza un segundo trabajo mientras hay otro activo, en vez de mantener una lista de espera. Para cambiar límites, copiá `settings.example.json` a `settings.json` dentro de la carpeta de datos y reiniciá. El resumen permite agrupar por canción, álbum, artista o usuario. La edición permite cambiar portada conservando la anterior si falla la validación. Las portadas se normalizan a JPEG cuadrado de 800 px.
 
 La auditoría OWASP ASVS vigente y la revisión de dependencias con avisos de seguridad se requieren antes de una exposición a internet. Los controles actuales y pruebas de autorización no reemplazan esa auditoría. CD, extracción, metadatos automáticos y piloto remoto permanecen en backlog.
 
@@ -74,3 +74,19 @@ Borradores persistentes con títulos y orden, inventario de pistas recibidas, co
 - Escuchas por hora con barras y valores legibles.
 
 Esta entrega conserva el esquema de datos de 0.1.1. Para volver a esa versión, detené el proceso y arrancá el paquete anterior con el mismo directorio de datos. Conservá un respaldo previo si trabajás con tu colección real.
+
+## Cambios de 0.6.0
+
+La búsqueda conserva el filtro al volver del álbum. El reproductor reserva espacio según su altura, ajusta los controles en anchos chicos y mantiene visible el foco. Pausar responde de inmediato y el control de posición acepta teclado.
+
+Importar conserva los WAV recibidos tras una interrupción. Al volver al borrador, se muestran las duraciones confirmadas y se pueden seleccionar solo las pistas pendientes. Al reordenar, el foco sigue a la pista movida.
+
+Para repetir la prueba de navegador, instalá Playwright 1.62.0 en el Python que ejecute el script, los motores y sus dependencias de sistema. La app necesita su entorno `.venv` con las dependencias de `requirements.txt`. FFmpeg debe estar disponible. Cada recorrido inicia Waitress con datos temporales y usa los WAV sintetizados de `example/`.
+
+```sh
+python3 -m playwright install chromium webkit
+python3 qa/browser.py chromium
+python3 qa/browser.py webkit
+```
+
+Podés usar `--width 360` para repetir un ancho o `--screenshots /ruta` para guardar capturas. La prueba usa un puerto local libre.

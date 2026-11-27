@@ -227,7 +227,7 @@ def create_app(data=None):
      while block:=w.readframes(65536):actual+=len(block)
      if actual!=expected:raise ValueError('WAV truncado')
     temp.replace(folder/(slot+'.wav'))
-   return jsonify(ok=True)
+   return jsonify(ok=True,duration=duration if slot!='cover' else None)
   except (ValueError,wave.Error,EOFError,UnidentifiedImageError,Image.DecompressionBombError):return error('Archivo inválido. Usá WAV PCM o una portada JPEG/PNG.')
   except OSError as exc:return error('No se pudo guardar el archivo; lo recibido antes se conserva.',507 if exc.errno in (28,122) else 400)
   finally:
